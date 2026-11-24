@@ -1,20 +1,15 @@
+from dotenv import load_dotenv
 import os
 import sys
 import time
-
 import numpy
 import parselmouth
 import requests
-from dotenv import load_dotenv
 
 load_dotenv()
-
 AUDIO_FILE = 'test.wav'
-
-# AmiVoice 非同期HTTP API (v2)
 AMIVOICE_URL = 'https://acp-api-async.amivoice.com/v2/recognitions'
 
-# 感情パラメータの定義: キー名 -> (日本語名, 最小値, 最大値)
 SENTIMENT_PARAMETERS = {
     'energy': ('エネルギー', 0, 100),
     'stress': ('ストレス', 0, 100),
@@ -40,7 +35,6 @@ SENTIMENT_PARAMETERS = {
 
 
 def analyze_formant(audio_path: str, max_formant: float = 5500.0):
-    """音声ファイルのF1・F2の平均値(Hz)を返す。検出できなければ (None, None)。"""
     snd = parselmouth.Sound(audio_path)
     formant = snd.to_formant_burg(maximum_formant=max_formant)
 
@@ -56,15 +50,6 @@ def analyze_formant(audio_path: str, max_formant: float = 5500.0):
 
 
 def analyze_amivoice(audio_path: str, timeout_sec: int = 300, interval_sec: int = 5) -> dict:
-    """AmiVoice非同期APIで文字起こしと感情分析を行う。
-
-    戻り値:
-        {'text': 文字起こし,
-         'sentiment': {日本語名: 0〜1に正規化した平均値},
-         'sentiment_raw': {日本語名: 正規化前の平均値}}
-    感情分析の結果が空(音声が短い・小さい)の場合、感情の辞書は空になる。
-    """
-
     api_key = os.environ.get('AMIVOICE_APIKEY')
     if not api_key:
         raise RuntimeError('環境変数 AMIVOICE_APIKEY が設定されていません(.envを確認してください)')
@@ -100,11 +85,7 @@ def analyze_amivoice(audio_path: str, timeout_sec: int = 300, interval_sec: int 
 
 
 def _parse_amivoice_result(data: dict) -> dict:
-    """完了時のレスポンスから、文字起こしと感情パラメータの平均値を取り出す。"""
-
-    root = data if 'text' in data else data.get('results', {})
-
-    sentiment = root.get('sentiment_analysis') or data.get('sentiment_analysis') or {}
+    sentiment = data.get('sentiment_analysis') or {}
     segments = sentiment.get('segments', [])
 
     sums, counts = {}, {}
@@ -125,7 +106,7 @@ def _parse_amivoice_result(data: dict) -> dict:
         normalized[label] = min(1.0, max(0.0, (mean - minimum) / (maximum - minimum)))
 
     return {
-        'text': root.get('text', ''),
+        'text': data.get('text', ''),
         'sentiment': normalized,
         'sentiment_raw': raw,
     }
