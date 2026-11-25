@@ -1,5 +1,5 @@
 // ブラウザで録音した音声(WebMなど)を、16kHz・モノラル・16bit PCM の WAV に変換する。
-// WAV にするのは、フォルマント分析(Praat)がWebMを読めないため。
+// WAV にするのは、ブラウザによって録音形式が違い(Safari は AmiVoice 非対応の MP4)、どのブラウザでも同じ形式で送るため。
 // 16kHz にするのは、AmiVoice が16kHzより高いレートを16kHzに下げて処理するため。
 
 const SAMPLE_RATE = 16000

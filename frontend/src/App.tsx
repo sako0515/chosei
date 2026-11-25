@@ -3,8 +3,6 @@ import { Bar, BarChart, XAxis, YAxis } from 'recharts'
 import { toWav } from './wav'
 
 type Result = {
-  f1: number | null
-  f2: number | null
   text: string
   sentiment: Record<string, number> // 日本語名 -> 0〜1に正規化した値
 }
@@ -78,7 +76,6 @@ export default function App() {
 
       {result && (
         <>
-          <p>F1: {result.f1?.toFixed(1)} Hz / F2: {result.f2?.toFixed(1)} Hz</p>
           <p className="my-2">文字起こし: {result.text}</p>
           <BarChart width={700} height={500} data={chartData} layout="vertical">
             <XAxis type="number" domain={[0, 1]} />

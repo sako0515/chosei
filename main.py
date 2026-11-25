@@ -2,8 +2,6 @@ from dotenv import load_dotenv
 import os
 import sys
 import time
-import numpy
-import parselmouth
 import requests
 
 load_dotenv()
@@ -32,21 +30,6 @@ SENTIMENT_PARAMETERS = {
     'dissatisfaction': ('不満', 0, 30),
     'extreme_emotion': ('極端な起伏', 0, 30),
 }
-
-
-def analyze_formant(audio_path: str, max_formant: float = 5500.0):
-    snd = parselmouth.Sound(audio_path)
-    formant = snd.to_formant_burg(maximum_formant=max_formant)
-
-    times = formant.xs()
-    f1_values = numpy.array([formant.get_value_at_time(1, t) for t in times])
-    f2_values = numpy.array([formant.get_value_at_time(2, t) for t in times])
-
-    valid = ~(numpy.isnan(f1_values) | numpy.isnan(f2_values))
-    if not valid.any():
-        return None, None
-
-    return float(f1_values[valid].mean()), float(f2_values[valid].mean())
 
 
 def analyze_amivoice(audio_path: str, timeout_sec: int = 300, interval_sec: int = 5) -> dict:
@@ -114,12 +97,6 @@ def _parse_amivoice_result(data: dict) -> dict:
 
 def main():
     audio_path = sys.argv[1] if len(sys.argv) > 1 else AUDIO_FILE
-
-    f1, f2 = analyze_formant(audio_path)
-    if f1 is None:
-        print('フォルマントを検出できませんでした。')
-    else:
-        print(f'{audio_path}: F1 = {f1:.1f} Hz, F2 = {f2:.1f} Hz')
 
     result = analyze_amivoice(audio_path)
     print(f"文字起こし: {result['text']}")
