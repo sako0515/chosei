@@ -1,6 +1,12 @@
 import { useRef, useState } from 'react'
-import { Bar, BarChart, XAxis, YAxis } from 'recharts'
-import { toWav } from './wav'
+import { AudioLines, Loader2, Mic, Moon, Square, Sun } from 'lucide-react'
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTheme } from '@/hooks/use-theme'
+
+// AmiVoice がそのまま受け付ける録音形式(Safari 既定の MP4 は非対応)
+const RECORDING_TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus']
 
 type Result = {
   text: string
@@ -9,7 +15,14 @@ type Result = {
 
 type Phase = 'idle' | 'recording' | 'analyzing'
 
+const STATUS: Record<Phase, { title: string; description: string }> = {
+  idle: { title: '声のチェックをはじめる', description: '右のマイクボタンを押してください' },
+  recording: { title: '録音中…', description: '話し終えたら停止ボタンを押してください' },
+  analyzing: { title: '分析中…', description: 'しばらくお待ちください' },
+}
+
 export default function App() {
+  const { theme, toggle } = useTheme()
   const [phase, setPhase] = useState<Phase>('idle')
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -17,8 +30,13 @@ export default function App() {
 
   async function startRecording() {
     setError(null)
+    const mimeType = RECORDING_TYPES.find((type) => MediaRecorder.isTypeSupported(type))
+    if (!mimeType) {
+      setError('このブラウザの録音形式には対応していません。Chrome か Firefox をお使いください')
+      return
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const recorder = new MediaRecorder(stream)
+    const recorder = new MediaRecorder(stream, { mimeType })
     const chunks: Blob[] = []
 
     recorder.ondataavailable = (e) => chunks.push(e.data)
@@ -40,7 +58,7 @@ export default function App() {
     setPhase('analyzing')
     try {
       const form = new FormData()
-      form.append('audio', await toWav(recorded), 'voice.wav')
+      form.append('audio', recorded)
       const res = await fetch('/api/analyze', { method: 'POST', body: form })
       if (!res.ok) throw new Error(`分析に失敗しました (${res.status})`)
       setResult(await res.json())
@@ -57,33 +75,71 @@ export default function App() {
     : []
 
   return (
-    <main className="mx-auto max-w-3xl p-8">
-      <h1 className="text-2xl font-bold">調声</h1>
+    <div className="min-h-svh bg-background text-foreground">
+      <header className="border-b">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
+          <span className="flex items-center gap-2 font-bold">
+            <AudioLines className="size-5" aria-hidden />
+            調声
+          </span>
+          <Button variant="ghost" size="icon" onClick={toggle} aria-label="テーマを切り替える">
+            {theme === 'dark' ? <Sun /> : <Moon />}
+          </Button>
+        </div>
+      </header>
 
-      {phase === 'idle' && (
-        <button onClick={startRecording} className="my-4 rounded bg-sky-400 px-4 py-2 text-white">
-          録音開始
-        </button>
-      )}
-      {phase === 'recording' && (
-        <button onClick={stopRecording} className="my-4 rounded bg-pink-400 px-4 py-2 text-white">
-          録音停止して分析
-        </button>
-      )}
-      {phase === 'analyzing' && <p className="my-4">分析中…</p>}
+      <main className="mx-auto max-w-xl space-y-8 px-4 py-16">
+        <div className="space-y-3 text-center">
+          <h1 className="text-4xl font-bold tracking-widest">調声</h1>
+          <p className="text-muted-foreground">
+            「おはよう」とひとこと。声から、今日の自分を見つめてみませんか。
+          </p>
+        </div>
 
-      {error && <p className="my-2 text-red-500">{error}</p>}
+        <Card>
+          <CardContent className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-medium">{STATUS[phase].title}</p>
+              <p className="text-sm text-muted-foreground">{STATUS[phase].description}</p>
+            </div>
+            {phase === 'idle' && (
+              <Button size="icon" onClick={startRecording} aria-label="録音開始">
+                <Mic />
+              </Button>
+            )}
+            {phase === 'recording' && (
+              <Button size="icon" variant="destructive" onClick={stopRecording} aria-label="録音停止">
+                <Square />
+              </Button>
+            )}
+            {phase === 'analyzing' && (
+              <Button size="icon" disabled aria-label="分析中">
+                <Loader2 className="animate-spin" />
+              </Button>
+            )}
+          </CardContent>
+        </Card>
 
-      {result && (
-        <>
-          <p className="my-2">文字起こし: {result.text}</p>
-          <BarChart width={700} height={500} data={chartData} layout="vertical">
-            <XAxis type="number" domain={[0, 1]} />
-            <YAxis type="category" dataKey="name" width={120} />
-            <Bar dataKey="value" fill="#7dd3fc" />
-          </BarChart>
-        </>
-      )}
-    </main>
+        {error && <p className="text-center text-sm text-destructive">{error}</p>}
+
+        {result && (
+          <Card>
+            <CardHeader>
+              <CardTitle>分析結果</CardTitle>
+              <CardDescription>文字起こし: {result.text}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={chartData.length * 32 + 40}>
+                <BarChart data={chartData} layout="vertical">
+                  <XAxis type="number" domain={[0, 1]} stroke="var(--muted-foreground)" />
+                  <YAxis type="category" dataKey="name" width={100} stroke="var(--muted-foreground)" />
+                  <Bar dataKey="value" fill="var(--foreground)" radius={4} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </main>
+    </div>
   )
 }
